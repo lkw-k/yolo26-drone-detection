@@ -41,8 +41,8 @@ yolo26-drone-detection/
     eval.py
   data/  -> D:\datasets\yolo26-drone-detection (정션, git 제외)
     raw/                    # 원본. 읽기 전용, 스크립트가 쓰지 않음
-    yolo/<source>/images/<split>/*.jpg
-    yolo/<source>/labels/<split>/*.txt
+    yolo/<source>/images/<raw subfolder>/*.jpg   # split은 경로가 아니라 매니페스트에만 기록
+    yolo/<source>/labels/<raw subfolder>/*.txt
     manifests/<source>.csv  # 변환 결과 (1행 = 이미지 1장)
     manifests/hashes.parquet
     manifests/final.csv     # 중복·누수 제거 후
@@ -83,12 +83,13 @@ yolo26-drone-detection/
 
 ### Det-Fly (`convert_detfly.py`)
 - VOC xml, 클래스 `UAV` → `0 drone`. 1920×1080으로 축소
-- **장면 그룹 만들기 (D2)**:
+- **장면 그룹 만들기 (D2)**, 2단계:
   1. 각 이미지를 64×36 흑백 썸네일로 만든다 (드론은 4K에서 작아서 썸네일에 거의 영향이 없음)
-  2. 썸네일 평균 절대 차이가 `T` 이하인 이미지 쌍을 연결하고, union-find로 연결 성분을 그룹으로 삼는다. 쌍 비교는 최근접 이웃 검색으로 한다 (전체 쌍 비교 1.3만² 회피)
-  3. `T`는 거리 분포가 갈라지는 지점(이웃 거리 히스토그램)에서 고르고, 값을 스크립트 상수와 리포트에 남긴다
-  4. 그룹별 대표 이미지 contact sheet(`data/reports/detfly_groups.jpg`)를 만들어 **사람이 눈으로 확인**한다. 너무 큰 그룹(전체의 30% 이상)이 생기면 `T`를 낮춘다
-- 그룹 단위로 train/val/test = 70/15/15 (이미지 수 기준, seed 0)
+  2. **연속 구간**: 썸네일 RMS 차이 ≤ 2.5(0–255)인 쌍을 연결하고 union-find 연결 성분을 구간으로 삼는다. 2.5는 최근접 거리 히스토그램에서 분포가 끝나는 지점(p99 5.7, 대부분 < 2.2) → 511개 구간
+  3. **장소·세션 클러스터**: 같은 장소가 여러 구간으로 쪼개져 train과 test에 함께 들어가는 문제가 있었다(contact sheet로 확인). 그래서 구간별 평균 16×9 썸네일로 average-linkage 계층 클러스터링을 하고, RMS 20에서 자른다 → **40개 장소**. 이것이 `group`이다
+  4. 장소별 무작위 6장 contact sheet(`data/reports/detfly_groups.jpg`)를 **사람이 눈으로 확인**한다. 한 장소가 전체의 30% 이상이면 스크립트가 멈춘다
+- 장소 단위로 train/val/test = 70/15/15 (이미지 수 기준, seed 0). 결과: train 9,290 (17개 장소) / val 1,991 (13개) / test 1,990 (10개)
+- **한계**: Det-Fly는 한 캠퍼스 주변에서 촬영돼서, 같은 트랙이나 산을 다른 고도·시간에 찍은 장면은 다른 클러스터가 될 수 있다. 예를 들어 val L012와 test L014는 같은 시점이다(train과는 겹치지 않음). 따라서 Det-Fly test는 "새 지역"이 아니라 "새 촬영 세션"에 대한 일반화를 잰다. 지역 자체가 다른 공중→공중 평가는 AOT 보조 테스트가 맡는다
 - viewpoint `a2a`. 빈 이미지 1장은 `bg`
 
 ### AOT (`convert_aot.py`)
@@ -105,12 +106,13 @@ yolo26-drone-detection/
 - **제외**: `yt-*` (D4), Anti-UAV 출신 `^\d{8}_\d{6}_\d+_\d+_\d+` (D6)
 - 남는 것: `V_*` 4,942장(181개 영상, Svanström 계열) + 기타(Unsplash 등) 2,094장 = 7,036장. 박스: 비행기 974 / 새 5,729 / 드론 1,735 / 헬기 2,374
 - `group`: `V_*`는 영상 ID(`V_AIRPLANE_0011`), 기타는 `_jpg.rf.` 앞의 원본 이름. Roboflow 증강본이 같은 그룹에 묶이게 하려는 것
-- 원본 train/valid/test는 무시하고 그룹 단위로 train/val = 85/15
+- 원본 train/valid/test는 무시하고 그룹 단위로 train/val = 85/15. 큰 영상 그룹이 train으로 몰려 val에 비행기·헬기가 0개가 되는 문제가 있어서 **층(V_AIRPLANE / V_DRONE / V_HELICOPTER / 기타)별로 따로 나눈다**
 - viewpoint `mixed`. 빈 라벨 파일은 `bg`
 
 ### Anti-UAV300 테스트 (`convert_antiuav_test.py`)
 - test 91개 시퀀스의 `visible.mp4`에서 **5프레임마다 1장** 추출 (`STRIDE = 5`)
-- `visible.json`의 `exist`가 1이면 `gt_rect [x,y,w,h]`로 `0 drone` 라벨을 만들고, 0이면 빈 라벨(`bg`)
+- `visible.json`의 `exist`가 1이면 `gt_rect [x,y,w,h]`로 `0 drone` 라벨을 만들고, 0이면 빈 라벨(`bg`). `exist`=1인데 rect가 비었거나 0이면 정답을 알 수 없으므로 건너뛴다
+- 결과: 17,078프레임 (드론 있음 15,949 / 빈 프레임 1,129)
 - `group`: 시퀀스 이름. split `test`, viewpoint `g2a`
 - 누수 검사용으로 train/val/test 전체 시퀀스의 **모든 프레임** pHash도 따로 계산한다 (이미지는 저장하지 않음)
 - zip 안의 `framecut.py`는 쓰지 않는다
@@ -214,7 +216,8 @@ uv run scripts/eval.py --baseline     # sapoepsilon/yolov11s-drone-detector
 - 출력: `data/runs/eval/<model>.json` + 비교 표 `data/reports/eval_summary.md`. 해석은 `eval-analyst`가 맡는다
 
 ## 8. 의존성
-- 추가: `uv add imagehash polars` (polars는 지금 ultralytics를 통해 간접으로 설치돼 있음 → 직접 의존성으로 명시)
+- 추가: `imagehash`, `polars`, `scipy` (Det-Fly 계층 클러스터링). polars와 scipy는 간접으로 설치돼 있었지만 직접 쓰므로 명시
+- 라벨 확인: `uv run scripts/preview_labels.py <source>` → `data/reports/preview_<source>.jpg`
 - 진행 바는 tqdm (ultralytics 의존성)
 - 일회성 다운로드 도구(`huggingface_hub`, `gdown`)는 `uvx`로만 실행하고 의존성에 넣지 않는다
 
