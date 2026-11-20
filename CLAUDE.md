@@ -12,7 +12,7 @@ The source of truth for decisions is `plan.md`. Read it before starting any task
 - Training framework: Ultralytics YOLO26 (NMS-free, AGPL-3.0).
 
 ## Hard rules (never break)
-1. **Test sets are untouchable.** Anti-UAV300 RGB frames and the held-out AOT sequences must never be used for training, validation, hyperparameter tuning, or threshold selection.
+1. **Test sets are untouchable.** Anti-UAV300 RGB frames, the Det-Fly test scene groups, the 7 AOT drone flights, and the AOT false-alarm test flights (see `spec.md` §0) must never be used for training, validation, hyperparameter tuning, or threshold selection.
 2. **Split by video / sequence / flight, never by frame.**
 3. **Deduplicate before merging** datasets (exact hash + perceptual hash).
 4. **Remove leakage**: drop any AOD-4 or seraphim image that matches a test-set frame.
@@ -23,7 +23,8 @@ The source of truth for decisions is `plan.md`. Read it before starting any task
 ## Workflow
 1. Check the "확인 필요" items in `plan.md` with small samples before writing `spec.md`.
 2. Write `spec.md` (folder layout, conversion rules, data.yaml, training configs, eval scripts).
-3. Implement step by step and confirm each step before moving on.
+3. Implement step by step and confirm each step before moving on (`spec.md` §9).
+4. Training is started by the user with one command: `uv run scripts/train.py --model {n|s} --stage {1|2}`. It must use early stopping, show an overall progress bar, and auto-resume from the last safe checkpoint after a crash or power loss (`spec.md` §6).
 
 ## Agents (`.claude/agents/`)
 - `dataset-auditor`: run after any data conversion/merge to check splits, duplicates, leakage, and class mapping.
