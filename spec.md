@@ -83,13 +83,14 @@ yolo26-drone-detection/
 
 ### Det-Fly (`convert_detfly.py`)
 - VOC xml, 클래스 `UAV` → `0 drone`. 1920×1080으로 축소
-- **장면 그룹 만들기 (D2)**, 2단계:
+- **장면 그룹 만들기 (D2)**:
   1. 각 이미지를 64×36 흑백 썸네일로 만든다 (드론은 4K에서 작아서 썸네일에 거의 영향이 없음)
   2. **연속 구간**: 썸네일 RMS 차이 ≤ 2.5(0–255)인 쌍을 연결하고 union-find 연결 성분을 구간으로 삼는다. 2.5는 최근접 거리 히스토그램에서 분포가 끝나는 지점(p99 5.7, 대부분 < 2.2) → 511개 구간
-  3. **장소·세션 클러스터**: 같은 장소가 여러 구간으로 쪼개져 train과 test에 함께 들어가는 문제가 있었다(contact sheet로 확인). 그래서 구간별 평균 16×9 썸네일로 average-linkage 계층 클러스터링을 하고, RMS 20에서 자른다 → **40개 장소**. 이것이 `group`이다
-  4. 장소별 무작위 6장 contact sheet(`data/reports/detfly_groups.jpg`)를 **사람이 눈으로 확인**한다. 한 장소가 전체의 30% 이상이면 스크립트가 멈춘다
-- 장소 단위로 train/val/test = 70/15/15 (이미지 수 기준, seed 0). 결과: train 9,290 (17개 장소) / val 1,991 (13개) / test 1,990 (10개)
-- **한계**: Det-Fly는 한 캠퍼스 주변에서 촬영돼서, 같은 트랙이나 산을 다른 고도·시간에 찍은 장면은 다른 클러스터가 될 수 있다. 예를 들어 val L012와 test L014는 같은 시점이다(train과는 겹치지 않음). 따라서 Det-Fly test는 "새 지역"이 아니라 "새 촬영 세션"에 대한 일반화를 잰다. 지역 자체가 다른 공중→공중 평가는 AOT 보조 테스트가 맡는다
+  3. **장소·세션 클러스터**: 같은 장소가 여러 구간으로 쪼개져 train과 test에 함께 들어가는 문제가 있었다(contact sheet로 확인). 그래서 구간별 평균 16×9 썸네일로 average-linkage 계층 클러스터링을 하고, RMS 20에서 자른다 → 40개 클러스터
+  4. **장소 병합 (2026-11-21 추가)**: 3번만으로는 밝기가 변한 같은 세션이 갈라졌다(하늘만 찍은 세션이 train L002와 test L013에 나뉘어 들어감, 썸네일 거리 4.5). 그래서 두 클러스터에서 가장 가까운 프레임 쌍의 거리가 ≤ 18이면 합친다(프레임 단위 single linkage) → **20개 장소**. 이것이 `group`이다. 18은 가능한 최댓값이다. 20 이상이면 한 장소가 39%가 된다
+  5. 장소별 무작위 6장 contact sheet(`data/reports/detfly_groups.jpg`)와 split 경계 쌍(`data/reports/detfly_split_boundary.jpg`)을 눈으로 확인한다. 한 장소가 전체의 35% 이상이면 스크립트가 멈춘다(실제 한 세션이 32%라서 30%에서 올림)
+- 장소 단위로 train/val/test = 70/15/15 (이미지 수 기준, seed 0). 결과: train 9,274 (11개 장소) / val 2,007 (4개, 빈 이미지 1장 포함) / test 1,989 (5개). split 사이 최소 썸네일 거리: test↔train 18.5, test↔val 18.6, val↔train 28.3
+- **한계**: Det-Fly는 한 캠퍼스 주변에서 촬영돼서, 같은 장소를 다른 시간·밝기에 찍은 장면은 다른 장소로 남는다. 경계 쌍을 보면 test L003↔train L009(캠퍼스와 산), test L006↔val L002(건물과 산), test L010↔val L012(농구장)가 같은 장소, 다른 세션이다. 따라서 Det-Fly test는 "새 지역"이 아니라 "새 촬영 세션"에 대한 일반화를 잰다. 지역 자체가 다른 공중→공중 평가는 AOT 보조 테스트가 맡는다
 - viewpoint `a2a`. 빈 이미지 1장은 `bg`
 
 ### AOT (`convert_aot.py`)
@@ -127,6 +128,9 @@ yolo26-drone-detection/
 1. **테스트 누수 (blocking)**: train/val 이미지 중 테스트 전용 데이터(0절 4개 + Anti-UAV train/val 프레임)와 md5가 같거나 pHash 해밍 거리 ≤ 6이면 train/val 쪽을 삭제
 2. **pathikg 제외 (D4)**: seraphim 이미지 중 pathikg 이미지와 md5가 같거나 해밍 거리 ≤ 4이면 삭제. 대조가 끝나면 pathikg 원본은 삭제
 3. **학습 데이터 사이 중복**: md5 동일 또는 해밍 거리 ≤ 4인 묶음은 1장만 남긴다. 남길 우선순위는 Det-Fly > DUT > AOT > AOD-4 > seraphim (원본에 가까운 쪽). 묶음이 train과 val에 걸치면 val 쪽을 남기고 train 쪽을 지운다
+   - 해밍 거리 기준 중복은 **서로 다른 소스 사이**, 또는 재업로드 모음인 seraphim·AOD-4 안의 **서로 다른 그룹 사이**에서만 센다. 한 영상·장면 그룹 안의 거의 같은 연속 프레임은 사본이 아니라 시간상 이웃이라서 남긴다(그렇지 않으면 Det-Fly·DUT·AOT 대부분이 지워짐). md5가 같으면 항상 중복이다
+   - **NCC 검증 (2026-11-21 추가)**: pHash는 단색 하늘 이미지를 잘 구분하지 못한다(회색 하늘의 헬기와 드론이 거리 4~6). 그래서 2·3번에서 md5가 다른 pHash 일치는 32×32 흑백 썸네일의 정규화 상관계수(NCC)가 0.85 이상일 때만 중복으로 본다. 샘플로 보면 진짜 사본은 약 1.0, 하늘이 닮은 오탐은 0.3~0.7이다. 1번 누수는 검증 없이 보수적으로 지운다(오탐이어도 잃는 건 학습 이미지 1장)
+   - **DUT (D3 확인 결과)**: DUT train/val 7,800장 중 약 6,100장이 DUT test와 해밍 거리 ≤ 4이고, 대부분 거리 0, NCC 1.0이다. 공식 split이 같은 영상의 프레임을 나눠 가진 것이다. D3대로 지우지 않고 보고만 한다. 따라서 `test_dut`는 오염된 참고 지표이고 일반화 성능으로 해석하면 안 된다
 4. 결과 → `manifests/final.csv`, 요약 → `data/reports/dedupe_leak.md`
 - 해밍 거리 임계값은 실행 후 경계 근처 쌍 20개를 contact sheet로 보고 조정한다
 
@@ -160,7 +164,9 @@ uv run scripts/train.py --model n --stage 1 --smoke   # 파이프라인 확인�
 - 명령 하나로 학습이 시작된다. 별도 준비 단계가 필요 없다
 - run 이름은 `stage{1|2}-yolo26{n|s}`, 결과는 `data/runs/` (D 드라이브)
 - 2단계는 같은 모델의 `stage1-yolo26{n|s}/weights/best.pt`에서 시작한다. 없으면 바로 에러로 끝낸다
-- `--smoke`: 각 split에서 200장, epochs 1, imgsz 640, run 이름 뒤에 `-smoke`
+- `--smoke`: 각 split에서 200장, epochs 3(강제 종료 후 이어하기를 시험하려면 2 epoch 이상 필요), save_period 1, imgsz 640, run 이름 뒤에 `-smoke`
+- 끝난 run에는 `done.json`을 남긴다. Ultralytics는 끝날 때 `last.pt`의 optimizer를 지우므로, 끝났는지는 이 파일로 판단한다
+- 1단계 COCO 가중치는 `data/weights/yolo26{n,s}.pt`에 자동으로 받는다
 
 ### 설정 (`configs/train_stage{1,2}.yaml`, n/s 공통)
 | 항목 | 1단계 | 2단계 |
@@ -207,6 +213,8 @@ uv run scripts/eval.py --weights data/runs/stage2-yolo26n/weights/best.pt
 uv run scripts/eval.py --baseline     # sapoepsilon/yolov11s-drone-detector
 ```
 - 추론은 Ultralytics `predict`(conf 0.001, 우리 모델은 imgsz 1280, baseline은 원래 imgsz 640)로 하고, 지표는 직접 계산한다
+- 모델마다 예측 결과(drone 박스)를 `data/runs/eval/<name>/preds_<list>.parquet`에 캐시한다. 공통 conf threshold는 모델을 평가할 때마다 캐시에서 모든 모델 지표를 다시 계산해서 반영한다(`--summary`는 재계산만 함)
+- baseline 가중치(`data/weights/baseline_yolov11s.pt`)는 사용자가 직접 받는다. 외부 pickle 파일이라 자동으로 받거나 로드하지 않는다
 - **매칭**: drone 클래스만 대상, IoU ≥ 0.5, 점수 내림차순 greedy
 - **지표**: test 목록별 drone AP50, recall, mAP50-95(참고용)
 - **크기 구간**: GT 박스의 `sqrt(w·h)`(저장된 이미지 픽셀 기준) <8 / 8–16 / 16–32 / ≥32. 매칭되지 않은 예측은 자기 크기 구간에 넣는다 (COCO area range 방식)
@@ -218,7 +226,7 @@ uv run scripts/eval.py --baseline     # sapoepsilon/yolov11s-drone-detector
 ## 8. 의존성
 - 추가: `imagehash`, `polars`, `scipy` (Det-Fly 계층 클러스터링). polars와 scipy는 간접으로 설치돼 있었지만 직접 쓰므로 명시
 - 라벨 확인: `uv run scripts/preview_labels.py <source>` → `data/reports/preview_<source>.jpg`
-- 진행 바는 tqdm (ultralytics 의존성)
+- 진행 바는 tqdm. ultralytics 8.4는 tqdm·pyyaml에 의존하지 않으므로 둘 다 직접 의존성으로 추가했다
 - 일회성 다운로드 도구(`huggingface_hub`, `gdown`)는 `uvx`로만 실행하고 의존성에 넣지 않는다
 
 ## 9. 구현 순서와 확인 방법

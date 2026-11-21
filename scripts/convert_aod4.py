@@ -2,14 +2,17 @@
 
 Excluded: YouTube frames (`yt-*`, D4) and Anti-UAV-origin frames (D6).
 Groups: `V_<CLASS>_<id>` video for Svanstrom-style frames, otherwise the original file name
-before Roboflow's `.rf.<hash>` suffix (keeps augmented copies together). Split train/val = 85/15.
+before Roboflow's `.rf.<hash>` suffix (keeps augmented copies together). Groups listed in
+data/manifests/aod4_group_merge.csv (written by dedupe_leak.py: videos of one session) are merged.
+Split train/val = 85/15.
 """
 
+import csv
 import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from common import RAW, YOLO, clip_yolo_line, image_size, label_path, link_image, manifest_row, split_groups, write_label, write_manifest
+from common import MANIFESTS, RAW, YOLO, clip_yolo_line, image_size, label_path, link_image, manifest_row, split_groups, write_label, write_manifest
 
 SRC = RAW / "aod4"
 DST = YOLO / "aod4"
@@ -60,6 +63,13 @@ def main() -> None:
                 jobs.append((p, s))
     with ThreadPoolExecutor(16) as ex:
         rows = list(ex.map(convert, jobs, chunksize=64))
+    merge_file = MANIFESTS / "aod4_group_merge.csv"
+    if merge_file.exists():
+        with open(merge_file, newline="") as f:
+            merged = {r["group"]: r["merged"] for r in csv.DictReader(f)}
+        for r in rows:
+            r["group"] = merged.get(r["group"], r["group"])
+        print(f"aod4: applied {len(merged)} group merges from {merge_file.name}")
     # split each stratum (V_AIRPLANE / V_DRONE / V_HELICOPTER / other) separately so val keeps every class
     strata: dict[str, dict[str, int]] = {}
     for r in rows:

@@ -4,14 +4,15 @@ Steps:
   convert  resize to 1920x1080, write labels, cache 64x36 grayscale thumbnails
   group    link frames whose thumbnails are close (RMS diff <= threshold), take connected
            components as continuity segments, merge segments of the same place/session by
-           average-linkage clustering (--location-cut), split locations train/val/test = 70/15/15, write manifest
+           average-linkage clustering (--location-cut), merge locations whose closest frames are
+           within --merge-rms, split locations train/val/test = 70/15/15, write manifest
            and a contact sheet for visual review. Run without --threshold first to see the
            nearest-neighbour distance histogram.
 
 Usage:
   uv run scripts/convert_detfly.py convert
   uv run scripts/convert_detfly.py group
-  uv run scripts/convert_detfly.py group --threshold 2.5 --location-cut 20
+  uv run scripts/convert_detfly.py group --threshold 2.5 --location-cut 20 --merge-rms 18
 """
 
 import argparse
@@ -34,7 +35,8 @@ THUMBS = DST / "thumbs.npz"
 BOXES = DST / "boxes.csv"
 THUMB_SIZE = (64, 36)
 LOCATION_CUT = 20.0  # RMS (0-255) between segment-mean 16x9 thumbnails; chosen from data/reports/detfly_groups.jpg
-MAX_GROUP_FRACTION = 0.30  # spec: lower the threshold if one group holds >=30% of frames
+MERGE_RMS = 18.0  # merge locations whose closest frames are this close; >=20 makes one location 39%
+MAX_GROUP_FRACTION = 0.35  # stop if one group holds >=35% of frames (one real session is ~32%)
 
 
 def convert_one(xml_path: Path) -> tuple[str, list, int, int, np.ndarray]:
@@ -87,7 +89,7 @@ def find(parent: np.ndarray, i: int) -> int:
     return i
 
 
-def group(threshold: float | None, location_cut: float) -> None:
+def group(threshold: float | None, location_cut: float, merge_rms: float = MERGE_RMS) -> None:
     z = np.load(THUMBS)
     images, x = z["images"], z["thumbs"].reshape(len(z["thumbs"]), -1).astype(np.float32)
     n = len(x)
@@ -125,6 +127,20 @@ def group(threshold: float | None, location_cut: float) -> None:
     means = np.stack([coarse[seg == s].mean(0) for s in range(seg.max() + 1)])
     loc_of_seg = fcluster(linkage(means, "average"), location_cut * np.sqrt(means.shape[1]), "distance")
     _, gid = np.unique(loc_of_seg[seg], return_inverse=True)
+
+    # Level 3: average linkage still splits one session when lighting drifts (e.g. a sky-only
+    # session landed in both train and test). Merge locations whose closest frame pair is within
+    # merge_rms (single linkage at frame level). See data/reports/detfly_location_pairs.jpg.
+    n_loc = gid.max() + 1
+    loc_parent = np.arange(n_loc)
+    for i, d in pairwise_rms(x):
+        a, b = np.nonzero((d <= merge_rms) & (gid[i : i + len(d), None] != gid[None, :]))
+        for la, lb in set(zip(gid[a + i].tolist(), gid[b].tolist())):
+            ra, rb = find(loc_parent, la), find(loc_parent, lb)
+            if ra != rb:
+                loc_parent[ra] = rb
+    _, gid = np.unique([find(loc_parent, g) for g in gid], return_inverse=True)
+    print(f"merge rms {merge_rms}: {n_loc} -> {gid.max() + 1} locations")
     sizes = np.bincount(gid)
     order = np.argsort(-sizes)
     print(f"location cut {location_cut}: {len(sizes)} locations; largest {sizes[order[:10]].tolist()}")
@@ -158,5 +174,6 @@ if __name__ == "__main__":
     ap.add_argument("step", choices=["convert", "group"])
     ap.add_argument("--threshold", type=float)
     ap.add_argument("--location-cut", type=float, default=LOCATION_CUT)
+    ap.add_argument("--merge-rms", type=float, default=MERGE_RMS)
     args = ap.parse_args()
-    convert() if args.step == "convert" else group(args.threshold, args.location_cut)
+    convert() if args.step == "convert" else group(args.threshold, args.location_cut, args.merge_rms)

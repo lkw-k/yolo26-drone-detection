@@ -142,8 +142,8 @@ def contact_sheet(items: list[tuple[Path, str]], out: Path, cols: int = 5, cell:
         with Image.open(img_path) as im:
             im = im.convert("RGB")
             draw = ImageDraw.Draw(im)
-            lbl = label_path(img_path)
-            if lbl.exists():
+            lbl = label_path(img_path) if "images" in Path(img_path).parts else None
+            if lbl and lbl.exists():
                 for line in lbl.read_text().splitlines():
                     c, cx, cy, bw, bh = line.split()
                     cx, cy, bw, bh = (float(v) for v in (cx, cy, bw, bh))

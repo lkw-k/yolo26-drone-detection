@@ -1,0 +1,13 @@
+# Stage 1: seraphim pre-training. Shared by YOLO26n and YOLO26s (hard rule 5). Spec §6.
+data: data/splits/stage1.yaml
+imgsz: 640
+epochs: 80
+patience: 15
+batch: 32
+optimizer: auto
+close_mosaic: 10
+seed: 0
+deterministic: true
+save_period: 5
+workers: 8
+amp: true
