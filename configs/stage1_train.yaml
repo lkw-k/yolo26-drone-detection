@@ -1,0 +1,17 @@
+# Stage 1 pretraining. Identical for YOLO26n and YOLO26s (CLAUDE.md rule 5):
+# only `model` differs on the command line.
+data: configs/seraphim.yaml
+imgsz: 640
+epochs: 100
+patience: 20          # early stopping: stop if val fitness does not improve for 20 epochs
+batch: 16             # n and s both fit on 8GB; larger batch keeps the GPU busy
+optimizer: auto
+amp: true
+workers: 6
+cache: disk           # decoded .npy on NVMe (~90GB) to skip JPEG decode
+close_mosaic: 10
+seed: 0
+deterministic: false   # allow cuDNN autotuning for speed
+save_period: 10       # keep a checkpoint every 10 epochs in case the PC goes down
+plots: true
+project: C:/Users/user/yolo26-drone-detection/runs/stage1
