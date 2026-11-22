@@ -1,0 +1,10 @@
+# Stage 2 data: DUT + Det-Fly + AOT (drone + negatives) + AOD-4 + seraphim replay.
+# `path` is overwritten at runtime by scripts/train_stage2.py for the current machine.
+path: data/stage2
+train: lists/stage2_train.txt   # built on the training machine by make_stage2_lists.py --lists
+val: lists/stage2_val.txt
+names:
+  0: drone
+  1: bird
+  2: airplane
+  3: helicopter
