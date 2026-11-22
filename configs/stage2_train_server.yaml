@@ -1,0 +1,16 @@
+# Stage 2 main training on the Ubuntu server (3x RTX 5000 16GB, DDP).
+# Same settings as stage 1 except imgsz and batch. n and s use this same file.
+data: configs/stage2.yaml
+imgsz: 1280
+epochs: 100
+patience: 20          # early stopping: stop if val fitness does not improve for 20 epochs
+batch: 48             # total over 3 GPUs (16 per GPU); measured ~9.3GB/GPU for the model at 1280
+optimizer: auto
+amp: true
+workers: 4            # per GPU; ultralytics caps this at cpu_count / n_gpus
+cache: false          # server disk is only 40GB
+close_mosaic: 10
+seed: 0
+deterministic: false
+save_period: 10
+plots: true
