@@ -2,18 +2,65 @@
 
 YOLO26n / YOLO26s 기반 드론 탐지 모델. **지상→하늘**과 **공중→공중** 시나리오를 하나의 모델로 처리하는 것이 목표입니다.
 
-🤗 **Hugging Face 모델**: [YOLO26n](https://huggingface.co/illimax/yolo26n-drone) · [YOLO26s](https://huggingface.co/illimax/yolo26s-drone)
+🤗 **Hugging Face 모델**: [YOLO26n](https://huggingface.co/illimax/yolo26n-drone) · [YOLO26s](https://huggingface.co/illimax/yolo26s-drone)  
+🎮 **데모**: [YOLO26n Space](https://huggingface.co/spaces/illimax/yolo26n-drone) · [YOLO26s Space](https://huggingface.co/spaces/illimax/yolo26s-drone)
 
-> 🚧 진행 상태: 데이터 파이프라인, 학습·평가 스크립트 완료 → **1단계 학습 시작 전**
+> ✅ 진행 상태: **학습 완료**. YOLO26n·YOLO26s 가중치와 데모를 Hugging Face에 공개했습니다. 성능은 [결과](#결과) 참고.
 
 ## 개요
-- **모델**: YOLO26n, YOLO26s (NMS-free). 같은 데이터, 같은 설정으로 학습해 비교
+- **모델**: YOLO26n, YOLO26s (NMS-free). s는 이 레포 파이프라인, n은 이전 파이프라인으로 학습 (데이터 구성이 달라 직접 비교 불가)
 - **학습**: 2단계 (seraphim 사전학습 @640 → 실제 시점 혼합 데이터 본학습 @1280)
 - **클래스**: drone, bird, airplane, helicopter (추론 시 drone만 사용)
 - **데이터**: DUT Anti-UAV, Det-Fly, AOT, AOD-4, seraphim
 - **테스트**: Anti-UAV300 RGB (지상→하늘), Det-Fly 홀드아웃 장면 (공중→공중), AOT 드론 비행 (공중→공중 보조), AOT 오탐 비행 (오탐률)
 
 설계 결정과 그 이유는 [docs/design-decisions.md](docs/design-decisions.md)에 있습니다. 구현 명세는 [spec.md](spec.md), 원래 계획은 [plan.md](plan.md)입니다.
+
+## 결과
+
+수치는 모두 **drone 클래스** 기준입니다. ONNX 가중치는 NMS를 따로 적용해야 합니다.
+
+| 모델 | 파라미터 | 입력 | 추천 conf | 가중치 |
+|---|---|---|---|---|
+| [YOLO26s](https://huggingface.co/illimax/yolo26s-drone) | 9.9M | 1280 | 0.40 | .pt 20.4 MB / .onnx 38.7 MB |
+| [YOLO26n](https://huggingface.co/illimax/yolo26n-drone) | 2.5M | 1280 | 0.26 | .pt 5.6 MB / .onnx 10.4 MB |
+
+### YOLO26s (conf 0.40)
+| 평가셋 | Precision | Recall | F1 | AP50 |
+|---|---|---|---|---|
+| Val (9,350장) | 0.936 | 0.849 | 0.891 | 0.893 |
+| Anti-UAV300 test (지상→하늘) | 0.956 | 0.655 | 0.777 | 0.801 |
+| DUT Anti-UAV test (지상→하늘, 참고용) | 0.989 | 0.957 | 0.973 | 0.977 |
+| Det-Fly 테스트 장면 (공중→공중) | 0.869 | 0.552 | 0.675 | 0.633 |
+| AOT 홀드아웃 (공중→공중) | - | 0.000 | - | 0.000 |
+
+- **오탐**: AOT 새·비행기·헬기·빈 하늘 1,626프레임에서 drone 예측 0건
+- **약점**: 16~32px 드론 (Anti-UAV300 AP50 0.345), 복잡한 공중→공중 배경 (Det-Fly). AOT 홀드아웃 드론은 전부 16px 미만이고 AOT 학습 split에는 드론이 없어서, 일부를 찾아도 airplane으로 분류해 recall이 0
+- **속도**: 데스크톱 CPU(PyTorch), 1280 입력 기준 이미지당 약 125ms
+- **학습**: seraphim @640 80 epoch → 혼합 데이터 @1280 100 epoch (best: epoch 93)
+- 추천 conf는 검증셋에서 drone F1이 가장 높은 지점이며, 테스트 데이터는 학습·임계값 선택에 쓰지 않았습니다.
+
+### YOLO26n (conf 0.26)
+| 평가셋 | Precision | Recall | F1 | AP50 |
+|---|---|---|---|---|
+| Val (4,595장) | 0.926 | 0.842 | 0.882 | 0.877 |
+| Anti-UAV300 test (지상→하늘) | 0.891 | 0.390 | 0.543 | 0.520 |
+| AOT 홀드아웃 (공중→공중) | 0.904 | 0.171 | 0.287 | 0.181 |
+
+- **오탐**: 새·비행기·헬기·빈 하늘 프레임에서 0~0.1%
+- **약점**: recall. 건물 배경, 짙은 안개, 야간, 8px 미만 드론을 자주 놓침
+- **속도**: 4스레드 CPU, 1080p 프레임당 약 108ms
+- **학습**: seraphim @640 → 혼합 데이터 @1280 100 epoch (best: epoch 97)
+
+> n과 s는 학습 데이터 구성과 검증셋이 달라 수치를 직접 비교할 수 없습니다.
+
+### 사용법
+```python
+from ultralytics import YOLO
+
+model = YOLO("yolo26s-drone-1280.pt")  # n: "yolo26n-drone-1280.pt", conf=0.26
+results = model.predict("image.jpg", imgsz=1280, conf=0.40, classes=[0])  # drone만
+```
 
 ## 파이프라인
 ```mermaid
