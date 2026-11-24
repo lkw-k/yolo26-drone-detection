@@ -1,0 +1,10 @@
+# Stage 1 data: seraphim (drone only). Class map is the fixed 4-class map;
+# bird/airplane/helicopter have no boxes in stage 1.
+path: C:/Users/user/yolo26-drone-detection/data/stage1
+train: lists/seraphim_train.txt   # seraphim train minus leakage exclusions
+val: lists/seraphim_val.txt       # seraphim test minus leakage exclusions
+names:
+  0: drone
+  1: bird
+  2: airplane
+  3: helicopter

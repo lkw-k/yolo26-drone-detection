@@ -1,0 +1,16 @@
+# Stage 1 pretraining on the Ubuntu server (3x RTX 5000 16GB, DDP).
+# only `model` differs on the command line.
+data: configs/seraphim.yaml
+imgsz: 640
+epochs: 100
+patience: 20          # early stopping: stop if val fitness does not improve for 20 epochs
+batch: 96             # total over 3 GPUs (32 per GPU); same for n and s
+optimizer: auto
+amp: true
+workers: 4            # per GPU; ultralytics caps this at cpu_count / n_gpus
+cache: false          # server disk is only 40GB; no room for a .npy cache
+close_mosaic: 10
+seed: 0
+deterministic: false   # allow cuDNN autotuning for speed
+save_period: 10       # keep a checkpoint every 10 epochs in case the PC goes down
+plots: true

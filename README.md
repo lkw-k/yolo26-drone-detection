@@ -74,6 +74,12 @@ uv run scripts/eval.py --baseline   # data/weights/baseline_yolov11s.pt 를 직�
 ```
 데이터, 가중치, 학습 결과(`data/`)는 레포에 포함하지 않습니다.
 
+### 공개 모델별 학습 코드
+| 모델 | 학습 코드 | 비고 |
+|---|---|---|
+| [illimax/yolo26s-drone](https://huggingface.co/illimax/yolo26s-drone) | 위 파이프라인 (`scripts/train.py`, `scripts/eval.py`) | 2단계 서버 설정: `configs/train_stage2_server.yaml` (batch 30, GPU 3장) |
+| [illimax/yolo26n-drone](https://huggingface.co/illimax/yolo26n-drone) | 이전 서버 파이프라인 (`scripts/prepare_*.py`, `make_stage*_lists.py`, `train_stage1.py`, `train_stage2.py`, `eval_test.py`, `ydet/`, `configs/stage*`) | 데이터 구성이 달라 s와 직접 비교 불가 |
+
 ## 라이선스
 - 코드: [AGPL-3.0](LICENSE) (Ultralytics YOLO26 라이선스를 따름)
 - `.claude/agents/`의 일부 에이전트: MIT, [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 참고
