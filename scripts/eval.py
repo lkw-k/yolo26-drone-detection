@@ -44,7 +44,9 @@ def drone_class(names: dict) -> int:
 
 def predict_list(model, images: list[str], imgsz: int, cls: int) -> pl.DataFrame:
     rows = []
-    for r in model.predict(images, imgsz=imgsz, conf=0.001, stream=True, verbose=False, batch=8):
+    # feed chunks: a full path list is loaded as one batch by Ultralytics (OOM on large lists)
+    chunks = (images[i:i + 8] for i in range(0, len(images), 8))
+    for r in (r for c in chunks for r in model.predict(c, imgsz=imgsz, conf=0.001, verbose=False, batch=8)):
         b = r.boxes
         keep = (b.cls.cpu().numpy().astype(int) == cls)
         for (x1, y1, x2, y2), c in zip(b.xyxy.cpu().numpy()[keep], b.conf.cpu().numpy()[keep]):
