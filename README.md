@@ -2,6 +2,8 @@
 
 YOLO26n / YOLO26s 기반 드론 탐지 모델. **지상→하늘**과 **공중→공중** 시나리오를 하나의 모델로 처리하는 것이 목표입니다.
 
+🤗 **Hugging Face 모델**: [YOLO26n](https://huggingface.co/illimax/yolo26n-drone) · [YOLO26s](https://huggingface.co/illimax/yolo26s-drone)
+
 > 🚧 진행 상태: 데이터 파이프라인, 학습·평가 스크립트 완료 → **1단계 학습 시작 전**
 
 ## 개요
