@@ -2,14 +2,18 @@
 name = "yolo26-drone-detection"
 version = "0.1.0"
 description = "YOLO26n / YOLO26s drone detector for ground-to-air and air-to-air scenarios"
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "cloudpickle>=3.1.1",
     "huggingface-hub>=2.4.0",
     "imagehash>=4.3.2",
     "pandas>=3.1.1",
+    "polars>=2.1.0",
+    "pyyaml>=6.0.4",
+    "scipy>=1.18.1",
     "torch>=2.11.0",
     "torchvision>=0.26.0",
+    "tqdm>=4.70.1",
     "ultralytics>=8.4.216",
 ]
 
@@ -17,8 +21,8 @@ dependencies = [
 package = false
 
 [tool.uv.sources]
-torch = { index = "pytorch-cu128" }
-torchvision = { index = "pytorch-cu128" }
+torch = [{ index = "pytorch-cu128", marker = "sys_platform == 'win32' or sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cu128", marker = "sys_platform == 'win32' or sys_platform == 'linux'" }]
 
 [[tool.uv.index]]
 name = "pytorch-cu128"

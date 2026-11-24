@@ -1,0 +1,13 @@
+# Stage 2: mixed-data training from the stage-1 best.pt. Shared by YOLO26n and YOLO26s (hard rule 5). Spec §6.
+data: data/splits/stage2.yaml
+imgsz: 1280
+epochs: 100
+patience: 20
+batch: 8
+optimizer: auto
+close_mosaic: 10
+seed: 0
+deterministic: true
+save_period: 5
+workers: 8
+amp: true

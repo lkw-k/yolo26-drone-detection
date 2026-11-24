@@ -1,0 +1,17 @@
+# Exact stage 2 args used for the published YOLO26s run (3x Quadro RTX 5000 server).
+# Same as train_stage2.yaml except batch 30 (48 OOMs) and device 0,1,2.
+# To reuse: copy over configs/train_stage2.yaml on the server. YOLO26n must use the same values (hard rule 5).
+# Stage 2: mixed-data training from the stage-1 best.pt. Shared by YOLO26n and YOLO26s (hard rule 5). Spec §6.
+data: data/splits/stage2.yaml
+imgsz: 1280
+epochs: 100
+patience: 20
+batch: 30
+optimizer: auto
+close_mosaic: 10
+seed: 0
+deterministic: true
+save_period: 5
+workers: 8
+amp: true
+device: 0,1,2
