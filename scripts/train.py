@@ -11,6 +11,7 @@ last_safe.pt and then the newest epoch{N}.pt if a file is unreadable. A finished
 """
 
 import argparse
+import csv
 import ctypes
 import hashlib
 import json
@@ -241,11 +242,17 @@ def main() -> None:
     finally:
         keep_awake(False)
     trainer = model.trainer
+    if hasattr(trainer, "stopper"):
+        epochs_run, best_epoch, best_fitness = trainer.epoch + 1, trainer.stopper.best_epoch, float(trainer.best_fitness or 0)
+    else:  # multi-GPU (DDP): training ran in a child process, so read the per-epoch log instead
+        rows = list(csv.DictReader((run / "results.csv").open()))
+        fit = [float(r["metrics/mAP50-95(B)"]) for r in rows]  # Ultralytics fitness for YOLO26 detect
+        epochs_run, best_epoch, best_fitness = len(rows), fit.index(max(fit)) + 1, max(fit)
     done = {
         "best": str(Path(trainer.best)),
-        "epochs_run": trainer.epoch + 1,
-        "best_epoch": trainer.stopper.best_epoch,
-        "best_fitness": float(trainer.best_fitness or 0),
+        "epochs_run": epochs_run,
+        "best_epoch": best_epoch,
+        "best_fitness": best_fitness,
         "finished": datetime.now().astimezone().isoformat(timespec="seconds"),
     }
     (run / "done.json").write_text(json.dumps(done, indent=2))
